@@ -85,11 +85,10 @@ ThreadQueue *ThreadQueueInit(MTMemoryManager *mm) {
 }
 
 ThreadPack *ThreadManagerAddThread(MTMemoryManager *mm, ThreadManager *tpm, ThreadQueue *tqm) {
-    pthread_t id;
-
     MemoryBigUnit *mbu = MTMemoryManagerBindingThread(mm, 999);
     MemoryInfo *tpami = MTMemoryManagerUnitCalloc(mm, mbu, sizeof(ThreadPack));
     MemoryInfo *tpmi = MTMemoryManagerUnitCalloc(mm, mbu, sizeof(ThreadID));
+    MemoryInfo *mid = MTMemoryManagerUnitCalloc(mm, mbu, sizeof(pthread_t));
 
     ThreadPack *tpa = (ThreadPack *) tpami->m;
     ThreadID *tp = (ThreadID *) tpmi->m;
@@ -103,8 +102,9 @@ ThreadPack *ThreadManagerAddThread(MTMemoryManager *mm, ThreadManager *tpm, Thre
     tp->ThreadState = ThreadStateStart;
     tp->mi = tpmi;
 
-    if (pthread_create(&id, NULL, TPMThread, tpa) == 0) {
-        tp->id = id;
+    if (pthread_create((pthread_t *) mid->m, NULL, TPMThread, tpa) == 0) {
+        tp->id = (pthread_t *) mid->m;
+        tp->mid = mid;
         tp->tid = MArrayListSize(tpm->tal) - 1;
         MArrayListAddIndex(mm, tpm->tal, tp);
         return tpa;
@@ -128,7 +128,7 @@ void ThreadManagerSetWaitDestroy(ThreadManager *tpm) {
     }
     for (int i = 0; i < MArrayListSize(tpm->tal); i++) {
         tp = (ThreadID *) MArrayListGetIndex(tpm->tal, i);
-        pthread_join(tp->id, NULL);
+        pthread_join(*(tp->id), NULL);
     }
 }
 
@@ -156,14 +156,14 @@ void ThreadManagerSetDestroy(ThreadManager *tpm) {
     }
     for (int i = 0; i < MArrayListSize(tpm->tal); i++) {
         tp = (ThreadID *) MArrayListGetIndex(tpm->tal, i);
-        pthread_join(tp->id, NULL);
+        pthread_join(*(tp->id), NULL);
     }
 }
 
 void ThreadManagerSetThreadState(ThreadID *tid, int i) {
     if (i == ThreadStateWaitDestroy | i == ThreadStateStop) {
         tid->ThreadState = i;
-        pthread_join(tid->id, NULL);
+        pthread_join(*(tid->id), NULL);
     } else {
         tid->ThreadState = i;
     }

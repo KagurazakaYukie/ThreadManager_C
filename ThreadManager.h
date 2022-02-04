@@ -15,10 +15,9 @@
 #define ThreadStateWaitDestroy 3
 
 typedef struct mtp {
-    pthread_t id;
-    int ThreadState;
-    int tid;
-    MemoryInfo *mi;
+    pthread_t *id;
+    int ThreadState,tid;
+    MemoryInfo *mi,*mid;
 } ThreadID;
 
 typedef struct mtpm {
