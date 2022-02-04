@@ -29,8 +29,8 @@ typedef struct mtpm {
 
 typedef struct mtq {
     QueueManager *qm;
-    pthread_mutex_t mutex;
-    MemoryInfo *mi;
+    pthread_mutex_t *mutex;
+    MemoryInfo *mi,*mmutex;
 } ThreadQueue;
 
 typedef struct mtpa {

@@ -14,13 +14,13 @@ void *TPMThread(void *c) {
     while (true) {
         state = tp->ThreadState;
         if (state != ThreadStateSuspend && state != ThreadStateStop) {
-            if (pthread_mutex_trylock(&(tpa->tqm->mutex)) == 0) {
+            if (pthread_mutex_trylock(tpa->tqm->mutex) == 0) {
                 if (QueueManagerGet((tpa->tqm)->qm) != NULL && tpa->tqm->qm->Size != 0) {
                     Queue *a1 = QueueManagerOut((tpa->tqm)->qm);
                     data = a1->data;
                     ft = a1->ft;
                     QueueDestroy2(tpa->tqm->qm, a1);
-                    pthread_mutex_unlock(&(tpa->tqm->mutex));
+                    pthread_mutex_unlock(tpa->tqm->mutex);
                     MemoryInfo *timi = MTMemoryManagerUnitCalloc(tpa->tpm->mm, tpa->mbu, sizeof(ThreadInfo));
                     ThreadInfo *in = (ThreadInfo *) timi->m;
                     in->tpa = tpa;
@@ -30,12 +30,12 @@ void *TPMThread(void *c) {
                     in = NULL;
                 } else {
                     if (state == ThreadStateWaitDestroy && tpa->tqm->qm->Size == 0) {
-                        pthread_mutex_unlock(&(tpa->tqm->mutex));
+                        pthread_mutex_unlock(tpa->tqm->mutex);
                         MTMemoryManagerUnitFree(tpa->mbu, tpa->mi);
                         MTMemoryManagerUnitFree(tpa->mbu, tp->mi);
                         break;
                     } else {
-                        pthread_mutex_unlock(&(tpa->tqm->mutex));
+                        pthread_mutex_unlock(tpa->tqm->mutex);
                     }
                 }
             }
@@ -63,20 +63,23 @@ ThreadManager *ThreadManagerInit(MTMemoryManager *mm) {
 
 ThreadQueue *ThreadManagerAddTask(MTMemoryManager *mm, ThreadQueue *tqm, void *ft, void *data) {
     while (true) {
-        if (pthread_mutex_trylock(&(tqm->mutex)) == 0) {
+        if (pthread_mutex_trylock(tqm->mutex) == 0) {
             break;
         }
     }
     QueueManagerAdd(mm, tqm->qm, ft, data);
-    pthread_mutex_unlock(&(tqm->mutex));
+    pthread_mutex_unlock(tqm->mutex);
     return tqm;
 }
 
 ThreadQueue *ThreadQueueInit(MTMemoryManager *mm) {
     MemoryInfo *mi = MTMemoryManagerCalloc(mm, sizeof(ThreadQueue));
+    MemoryInfo *mmutex = MTMemoryManagerCalloc(mm, sizeof(pthread_mutex_t));
     ThreadQueue *tqm = (ThreadQueue *) mi->m;
     tqm->mi = mi;
-    pthread_mutex_init(&(tqm->mutex), NULL);
+    tqm->mmutex = mmutex;
+    tqm->mutex = (pthread_mutex_t *) mmutex->m;
+    pthread_mutex_init(tqm->mutex, NULL);
     tqm->qm = QueueManagerInit(mm);
     return tqm;
 }
@@ -135,9 +138,10 @@ void ThreadManagerDestroy(ThreadManager *tpm) {
 }
 
 void ThreadQueueDestroy(MTMemoryManager *mm, ThreadQueue *tqm) {
-    pthread_mutex_destroy(&(tqm->mutex));
+    pthread_mutex_destroy(tqm->mutex);
     QueueManagerDestroy(mm, tqm->qm);
     MTMemoryManagerFree(mm, tqm->mi);
+    MTMemoryManagerFree(mm, tqm->mmutex);
 }
 
 MArrayList *ThreadManagerGetThreads(ThreadManager *tm) {
