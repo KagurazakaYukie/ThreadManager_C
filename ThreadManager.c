@@ -3,20 +3,22 @@
 #include "Queue.h"
 #include "MultitThreadMemoryManager.h"
 #include <stdbool.h>
+#include "SocketManager.h"
 
-//ぜんぶかんせい
 void *TPMThread(void *c) {
     ThreadPack *tpa = (ThreadPack *) c;
     tpa->mbu->id = pthread_self();
     ThreadID *tp = (ThreadID *) tpa->tid;
-    int state = 0;
+    int state = 0, i = 0, s = 1;
     void *ft = NULL, *data = NULL;
+    Queue *a1;
     while (true) {
         state = tp->ThreadState;
         if (state != ThreadStateSuspend && state != ThreadStateStop) {
-            if (pthread_mutex_trylock(tpa->tqm->mutex) == 0) {
-                if (QueueManagerGet((tpa->tqm)->qm) != NULL && tpa->tqm->qm->Size != 0) {
-                    Queue *a1 = QueueManagerOut((tpa->tqm)->qm);
+            if (pthread_mutex_lock(tpa->tqm->mutex) == 0) {
+                sem_getvalue(tpa->tqm->qm->sem, &i);
+                if (state == ThreadStateStart && i > 0) {
+                    a1 = QueueManagerOut(tpa->tqm->qm);
                     data = a1->data;
                     ft = a1->ft;
                     QueueDestroy2(tpa->tqm->qm, a1);
@@ -27,9 +29,8 @@ void *TPMThread(void *c) {
                     in->data = data;
                     (*((Ft) (ft)))(in);
                     MTMemoryManagerUnitFree(tpa->mbu, timi);
-                    in = NULL;
                 } else {
-                    if (state == ThreadStateWaitDestroy && tpa->tqm->qm->Size == 0) {
+                    if (state == ThreadStateWaitDestroy && i == 0) {
                         pthread_mutex_unlock(tpa->tqm->mutex);
                         MTMemoryManagerUnitFree(tpa->mbu, tpa->mi);
                         MTMemoryManagerUnitFree(tpa->mbu, tp->mi);
@@ -61,25 +62,27 @@ ThreadManager *ThreadManagerInit(MTMemoryManager *mm) {
     return tpm;
 }
 
-ThreadQueue *ThreadManagerAddTask(MTMemoryManager *mm, ThreadQueue *tqm, void *ft, void *data) {
-    while (true) {
-        if (pthread_mutex_trylock(tqm->mutex) == 0) {
-            break;
-        }
+ThreadQueue *ThreadManagerAddTask(MTMemoryManager *mm, ThreadQueue *tqm, void *ft, void *data, void *note) {
+    if (pthread_mutex_lock(tqm->mutex) == 0) {
+        QueueManagerAdd(mm, tqm->qm, ft, data, note);
+        pthread_mutex_unlock(tqm->mutex);
     }
-    QueueManagerAdd(mm, tqm->qm, ft, data);
-    pthread_mutex_unlock(tqm->mutex);
     return tqm;
 }
 
 ThreadQueue *ThreadQueueInit(MTMemoryManager *mm) {
     MemoryInfo *mi = MTMemoryManagerCalloc(mm, sizeof(ThreadQueue));
     MemoryInfo *mmutex = MTMemoryManagerCalloc(mm, sizeof(pthread_mutex_t));
+    MemoryInfo *mmutexsx = MTMemoryManagerCalloc(mm, sizeof(pthread_mutexattr_t));
     ThreadQueue *tqm = (ThreadQueue *) mi->m;
     tqm->mi = mi;
     tqm->mmutex = mmutex;
+    tqm->mmutexsxm = mmutexsx;
     tqm->mutex = (pthread_mutex_t *) mmutex->m;
-    pthread_mutex_init(tqm->mutex, NULL);
+    tqm->mmutexsx = (pthread_mutexattr_t *) mmutexsx->m;
+    pthread_mutexattr_setprotocol(tqm->mmutexsx, PTHREAD_PRIO_NONE);
+    pthread_mutexattr_settype(tqm->mmutexsx, PTHREAD_MUTEX_ERRORCHECK);
+    pthread_mutex_init(tqm->mutex, tqm->mmutexsx);
     tqm->qm = QueueManagerInit(mm);
     return tqm;
 }
@@ -89,19 +92,16 @@ ThreadPack *ThreadManagerAddThread(MTMemoryManager *mm, ThreadManager *tpm, Thre
     MemoryInfo *tpami = MTMemoryManagerUnitCalloc(mm, mbu, sizeof(ThreadPack));
     MemoryInfo *tpmi = MTMemoryManagerUnitCalloc(mm, mbu, sizeof(ThreadID));
     MemoryInfo *mid = MTMemoryManagerUnitCalloc(mm, mbu, sizeof(pthread_t));
-
     ThreadPack *tpa = (ThreadPack *) tpami->m;
     ThreadID *tp = (ThreadID *) tpmi->m;
-
     tpa->mbu = mbu;
     tpa->mi = tpami;
     tpa->tqm = tqm;
     tpa->tpm = tpm;
     tpa->tid = tp;
-
+    tpa->bool_i = 1;
     tp->ThreadState = ThreadStateStart;
     tp->mi = tpmi;
-
     if (pthread_create((pthread_t *) mid->m, NULL, TPMThread, tpa) == 0) {
         tp->id = (pthread_t *) mid->m;
         tp->mid = mid;

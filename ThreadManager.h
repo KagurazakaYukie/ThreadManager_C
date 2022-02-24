@@ -29,7 +29,8 @@ typedef struct mtpm {
 typedef struct mtq {
     QueueManager *qm;
     pthread_mutex_t *mutex;
-    MemoryInfo *mi,*mmutex;
+    pthread_mutexattr_t *mmutexsx;
+    MemoryInfo *mi,*mmutex,*mmutexsxm,*contm;
 } ThreadQueue;
 
 typedef struct mtpa {
@@ -37,6 +38,7 @@ typedef struct mtpa {
     ThreadManager *tpm;
     MemoryBigUnit *mbu;
     ThreadID *tid;
+    int bool_i;
     MemoryInfo *mi;
 } ThreadPack;
 
@@ -49,7 +51,7 @@ void *TPMThread(void *c);
 
 ThreadManager *ThreadManagerInit(MTMemoryManager *mm);
 
-ThreadQueue *ThreadManagerAddTask(MTMemoryManager *mm, ThreadQueue *tqm, void *ft, void *data);
+ThreadQueue *ThreadManagerAddTask(MTMemoryManager *mm, ThreadQueue *tqm, void *ft, void *data,void *note);
 
 ThreadQueue *ThreadQueueInit(MTMemoryManager *mm);
 
